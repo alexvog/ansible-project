@@ -1,0 +1,74 @@
+---
+- name: Install InfluxDB, Telegraf, Grafana (native)
+  hosts: rocky_linux_targets
+  become: yes
+  
+  tasks:
+    - name: Add InfluxData repository
+      yum_repository:
+        name: influxdata
+        description: InfluxData Repository - RHEL $releasever
+        baseurl: "https://repos.influxdata.com/stable/$basearch/main"
+        gpgcheck: yes
+        gpgkey: "https://repos.influxdata.com/influxdata-archive_compat.key"
+        enabled: yes
+
+    - name: Add Grafana repository
+      yum_repository:
+        name: grafana
+        description: Grafana
+        baseurl: https://rpm.grafana.com
+        gpgcheck: yes
+        gpgkey: https://rpm.grafana.com/gpg.key
+        sslcacert: /etc/pki/tls/certs/ca-bundle.crt
+        enabled: yes
+        repo_gpgcheck: yes
+        sslverify: yes
+
+    - name: Install InfluxDB and Telegraf
+      dnf:
+        name: 
+          - influxdb
+          - telegraf
+          - grafana
+        state: present
+
+    - name: Configure firewall for Grafana
+      firewalld:
+        port: 3000/tcp
+        permanent: true
+        state: enabled
+        immediate: yes
+
+    - name: Create /scripts directory
+      file:
+        path: /scripts
+        state: directory
+
+    - name: Copy top_stats.sh script
+      copy:
+        src: "/home/{{ user }}/ansible-project/files/native/top_stats.sh"
+        dest: /scripts/top_stats.sh
+
+    - name: Import the telegraf configuration file
+      copy:
+        src: "/home/{{ user }}/ansible-project/files/native/tig_stack/telegraf.conf"
+        dest: /etc/telegraf/telegraf.conf
+
+    - name: Import the grafana.db file
+      copy:
+        src: "/home/{{ user }}/ansible-project/files/native/tig_stack/grafana.db"
+        dest: /var/lib/grafana/grafana.db
+        owner: grafana
+        group: grafana
+        mode: '0640'
+
+    - name: Start and enable Telegraf, InfluxDB and Grafana services
+      service:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop:
+        - telegraf
+        - influxdb
+        - grafana-server

@@ -1,0 +1,115 @@
+---
+- name: Install Owncloud
+  hosts: rocky_linux_targets
+  become: yes
+  
+  tasks:
+    - name: Import EPEL repository GPG key
+      rpm_key:
+        state: present
+        key: https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-9
+        
+    - name: Import Remi repository GPG key
+      rpm_key:
+        state: present
+        key: https://rpms.remirepo.net/enterprise/9/RPM-GPG-KEY-remi
+    
+    - name: Install EPEL repository
+      dnf:
+        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+        state: present
+        validate_certs: no
+
+    - name: Install Remi repository
+      dnf:
+        name: https://rpms.remirepo.net/enterprise/remi-release-9.rpm
+        state: present
+
+    - name: Install yum-utils
+      dnf:
+        name: yum-utils
+        state: present
+
+    - name: Enable PHP 7.4 module
+      shell: dnf module -y enable php:remi-7.4
+
+    - name: Install necessary packages
+      dnf:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - httpd
+        - yum-utils
+        - php
+        - php-cli
+        - php-common
+        - php-curl
+        - php-gd
+        - php-intl
+        - php-json
+        - php-ldap
+        - php-mbstring
+        - php-mysqlnd
+        - php-xml
+        - php-zip
+        - php-opcache
+        - wget
+        - bzip2
+        - tar
+        - mariadb-server
+        - mariadb
+
+    - name: Configure firewall for HTTP and HTTPS
+      firewalld:
+        service: "{{ item }}"
+        permanent: true
+        state: enabled
+        immediate: yes
+      loop:
+        - http
+        - https
+
+    - name: Download Owncloud tarball
+      get_url:
+        url: https://download.owncloud.com/server/stable/owncloud-complete-latest.tar.bz2
+        dest: /tmp/owncloud-complete-latest.tar.bz2
+
+    - name: Extract Owncloud tarball
+      unarchive:
+        src: /tmp/owncloud-complete-latest.tar.bz2
+        dest: /var/www/
+        remote_src: yes
+
+    - name: Change ownership of Owncloud files
+      file:
+        path: /var/www/owncloud
+        owner: apache
+        group: apache
+        recurse: yes
+        state: directory
+
+    - name: Copy Owncloud configuration file
+      copy:
+        src: "/home/{{ user }}/ansible-project/files/native/owncloud/owncloud.conf"
+        dest: /etc/httpd/conf.d/owncloud.conf
+
+    - name: Enable and start MariaDB service
+      service:
+        name: mariadb
+        state: started
+        enabled: yes
+
+    - name: Execute SQL query
+      command:  mysql -u root --execute="CREATE DATABASE IF NOT EXISTS owncloud_db; GRANT ALL ON owncloud_db.* TO '{{ user }}'@'localhost' IDENTIFIED BY '123'; FLUSH PRIVILEGES;"
+    
+    - name: Set httpd_unified SELinux boolean
+      seboolean:
+        name: httpd_unified
+        persistent: yes
+        state: true
+    
+    - name: Enable and start httpd service
+      service:
+        name: httpd
+        state: started
+        enabled: yes

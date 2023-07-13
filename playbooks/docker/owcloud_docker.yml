@@ -1,0 +1,41 @@
+---
+- name: Install Owncloud server using Docker
+  hosts: rocky_linux_targets
+  become: yes
+  
+  tasks:
+    - name: Set ansible_host variable
+      set_fact:
+        ansible_host: "{{ hostvars[inventory_hostname]['ansible_host'] }}"
+
+    - name: Create Owncloud directory for docker-compose files
+      file:
+        path: "/home/{{ user }}/owncloud-docker-server"
+        state: directory
+        owner: "{{ user }}"
+        group: "{{ user }}"
+
+    - name: Download Owncloud docker-compose file
+      get_url:
+        url: https://raw.githubusercontent.com/owncloud/docs-server/master/modules/admin_manual/examples/installation/docker/docker-compose.yml
+        dest: "/home/{{ user }}/owncloud-docker-server/docker-compose.yml"
+        mode: 0644
+        owner: "{{ user }}"
+        group: "{{ user }}"
+
+    - name: Create Owncloud environment file
+      copy:
+        dest: "/home/{{ user }}/owncloud-docker-server/.env"
+        content: |
+          OWNCLOUD_VERSION=10.12
+          OWNCLOUD_DOMAIN={{ ansible_host }}:8080
+          OWNCLOUD_TRUSTED_DOMAINS={{ ansible_host }}
+          HTTP_PORT=8080
+        mode: 0600
+        owner: "{{ user }}"
+        group: "{{ user }}"
+
+    - name: Install Owncloud using docker-compose
+      docker_compose:
+        project_src: "/home/{{ user }}/owncloud-docker-server/"
+        state: present

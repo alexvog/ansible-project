@@ -1,0 +1,49 @@
+- name: Install Docker
+  hosts: rocky_linux_targets
+  become: yes
+
+  tasks:
+    - name: Install yum-utils package
+      dnf:
+        name: yum-utils
+        state: present
+
+    - name: Add Docker repository
+      command: yum-config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo
+
+    - name: Install Docker
+      dnf:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: latest
+        update_cache: true
+
+    - name: Install python-pip
+      dnf:
+        name: python-pip
+        state: present
+
+    - name: Install Docker SDK for Python, PyYAML, and docker-compose
+      pip:
+        name:
+          - docker
+          - PyYAML
+          - docker-compose
+          - backports.ssl_match_hostname
+          - paramiko
+          - pyOpenSSL
+        state: present
+
+    - name: Start Docker
+      service:
+        name: "docker"
+        enabled: true
+        state: started
+
+    - name: Add user to the Docker group
+      user:
+        name: "{{ user }}"
+        groups: docker
+        append: yes

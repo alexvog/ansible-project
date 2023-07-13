@@ -1,0 +1,11 @@
+all:
+  hosts:
+    controller:
+      ansible_host: 192.168.56.100
+  children:
+    rocky_linux_targets:
+      hosts:
+        native_target:
+          ansible_host: 192.168.56.120
+        docker_target:
+          ansible_host: 192.168.56.121

@@ -1,0 +1,109 @@
+---
+- name: Install InfluxDB & Grafana (Docker), Telegraf (native)
+  hosts: rocky_linux_targets
+  become: yes
+  
+  tasks:
+    - name: Create tig_network Docker network
+      docker_network:
+        name: tig_network
+
+    - name: Deploy InfluxDB container
+      docker_container:
+        name: influxdb
+        image: influxdb:1.8.10
+        detach: yes
+        restart_policy: always
+        networks:
+          - name: tig_network
+            aliases:
+              - influxdb
+        ports:
+          - "8086:8086"
+        volumes:
+          - "/home/{{ user }}/influxdb-data:/var/lib/influxdb"
+        container_default_behavior: "no_defaults"
+
+    - name: Add InfluxData repository # required for installing Telegraf
+      yum_repository:
+        name: influxdata
+        description: InfluxData Repository - RHEL $releasever
+        baseurl: "https://repos.influxdata.com/stable/$basearch/main"
+        gpgcheck: yes
+        gpgkey: "https://repos.influxdata.com/influxdata-archive_compat.key"
+        enabled: yes
+    
+    - name: Install Telegraf
+      dnf:
+        name: telegraf
+        state: present
+
+    - name: Add Telegraf user to the docker group # required for reading data from Docker
+      user:
+        name: telegraf
+        groups: docker
+        append: yes
+
+    - name: Import Telegraf configuration file
+      copy:
+        src: "/home/{{ user }}/ansible-project/files/docker/tig_stack/telegraf.conf"
+        dest: /etc/telegraf/telegraf.conf
+
+    - name: Create /scripts directory
+      file:
+        path: /scripts
+        state: directory
+
+    - name: Copy owncloud_server_stats.sh script
+      copy:
+        src: "/home/{{ user }}/ansible-project/files/docker/owncloud_server_stats.sh"
+        dest: /scripts/owncloud_server_stats.sh
+    
+    - name: Copy owncloud_mariadb_stats.sh script
+      copy:
+        src: "/home/{{ user }}/ansible-project/files/docker/owncloud_mariadb_stats.sh"
+        dest: /scripts/owncloud_mariadb_stats.sh
+
+    - name: Copy owncloud_redis_stats.sh script
+      copy:
+        src: "/home/{{ user }}/ansible-project/files/docker/owncloud_redis_stats.sh"
+        dest: /scripts/owncloud_redis_stats.sh
+
+    - name: Start and enable Telegraf
+      service:
+        name: telegraf
+        state: started
+        enabled: yes
+
+    - name: Create grafana-data directory
+      file:
+        path: "/home/{{ user }}/grafana-data"
+        state: directory
+        owner: "{{ user }}"
+        group: "{{ user }}"
+        mode: '0755'
+
+    - name: Copy grafana.db file
+      copy:
+        src: "/home/{{ user }}/ansible-project/files/docker/tig_stack/grafana.db"
+        dest: "/home/{{ user }}/grafana-data/grafana.db"
+        owner: "{{ user }}"
+        group: "{{ user }}"
+        mode: '0640'
+
+    - name: Deploy Grafana container
+      docker_container:
+        name: grafana
+        image: grafana/grafana-oss
+        user: "{{ lookup('pipe', 'id -u {{ user }}') }}"
+        detach: yes
+        restart_policy: always
+        networks:
+          - name: tig_network
+            aliases:
+              - grafana
+        ports:
+          - "3000:3000"
+        volumes:
+          - "/home/{{ user }}/grafana-data:/var/lib/grafana"
+        container_default_behavior: "no_defaults"
