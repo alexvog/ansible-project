@@ -1,3 +1,4 @@
+---
 - name: Install Docker
   hosts: rocky_linux_targets
   become: yes
